@@ -1,7 +1,8 @@
 # KUKA LBR iiwa / LBR Med kinematics
 
 Forward and inverse kinematics for the 7-DoF KUKA LBR iiwa and LBR Med (7 R800
-and 14 R820), as an importable Python module (`KUKA.py`, NumPy only).
+and 14 R820), as an importable Python module ([`python/KUKA.py`](python/KUKA.py), NumPy only) and an
+equivalent dependency-free C++17 library ([`cpp/`](cpp/)).
 
 The arm is redundant, so a pose has infinitely many IK solutions. They are
 selected with:
@@ -21,7 +22,9 @@ The robot model is chosen with the `payload` argument (kg), default `7`:
 
 Any other value raises `ValueError`. Joint angles follow the DH tables in the [DH Parameters](#dh-parameters) section below.
 
-## Usage
+## Python usage
+
+Run from `python/` (or add it to `PYTHONPATH`).
 
 ```python
 import numpy as np
@@ -67,10 +70,43 @@ reachable workspace or the elbow is singular (fully stretched or folded). Joint 
 ## Self-test
 
 ```
-python KUKA.py
+python python/KUKA.py
 ```
 
 Runs random FK → IK → FK round trips for both models (max pose error ≈ 1e-12).
+
+## C++ usage
+
+[`cpp/KUKA.h`](cpp/KUKA.h) / [`cpp/KUKA.cpp`](cpp/KUKA.cpp) provide the same functions in the
+`kuka` namespace (C++17, standard library only). Names, argument order, defaults, units, conventions
+and `payload` handling are identical to the Python module; matrices are `std::array`s
+(`Mat4`, `Mat3`, `Joints`) and results are structs.
+
+```cpp
+#include "KUKA.h"
+
+kuka::Joints q = {0.17, 0.52, -0.35, 1.05, 0.26, 0.70, 0.09};  // rad
+int payload = 14;                                              // 7 or 14
+
+kuka::FKResult fk = kuka::forward_kinematics(q, payload);      // .pose .param .conf .jout
+kuka::IKResult ik = kuka::inverse_kinematics(fk.pose, fk.param, fk.conf, payload);  // .joints .s_mat .w_mat
+bool ok = kuka::within_joint_limits(ik.joints, payload);
+```
+
+| Python | C++ |
+|---|---|
+| `forward_kinematics(joints, payload=7)` | `kuka::forward_kinematics(const Joints&, int payload = 7)` → `FKResult` |
+| `inverse_kinematics(pose, param=0.0, conf=0, payload=7)` | `kuka::inverse_kinematics(const Mat4&, double param = 0, int conf = 0, int payload = 7)` → `IKResult` |
+| `configuration`, `dh_table`, `dh_matrix`, `within_joint_limits` | same names in `kuka::` |
+| `KukaError` (`ValueError`) | `kuka::KukaError` (`std::runtime_error`) for unreachable/singular poses; `std::invalid_argument` for a bad `payload` |
+
+Build and run the self-test (also cross-checks fixed values against the Python module):
+
+```
+cd cpp
+cmake -S . -B build && cmake --build build && ./build/test_kuka
+# or: c++ -std=c++17 -O2 KUKA.cpp test_kuka.cpp -o test_kuka && ./test_kuka
+```
 
 ## DH Parameters
 
@@ -84,7 +120,7 @@ These parameters adhere to the **Modified (Craig) DH Convention**, which is what
 
 $$T_{i-1}^{i} = Rot_x(\alpha_{i-1}) \cdot Trans_x(a_{i-1}) \cdot Rot_z(\theta_i) \cdot Trans_z(d_i)$$
 
-The analytic solver internally uses an equivalent standard-DH chain; the two agree on the full flange pose once joint 4 is sign-converted, which `KUKA.py` does automatically, so all inputs and outputs follow the tables below.
+The analytic solver internally uses an equivalent standard-DH chain; the two agree on the full flange pose once joint 4 is sign-converted, which both implementations do automatically, so all inputs and outputs follow the tables below.
 
 ---
 
