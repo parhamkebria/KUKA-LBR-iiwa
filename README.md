@@ -1,4 +1,4 @@
-# KUKA LBR iiwa kinematics (`KUKA.py`)
+# KUKA LBR iiwa kinematics
 
 Forward and inverse kinematics for the 7-DoF KUKA LBR iiwa, as an importable
 Python module (NumPy only). 
