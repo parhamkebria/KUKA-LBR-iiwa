@@ -61,3 +61,54 @@ python KUKA.py
 ```
 
 Runs random FK → IK → FK round trips (max pose error ≈ 1e-12).
+
+# KUKA LBR Med & LBR iiwa DH Parameters
+
+This repository contains the standard Denavit-Hartenberg (DH) parameters for the **KUKA LBR Med** and **KUKA LBR iiwa** 7-DOF collaborative robot arms. Because the LBR Med is built directly on the LBR iiwa chassis, models sharing the same payload/reach designation utilize identical geometric forward and inverse kinematics models.
+
+## Kinematic Structure
+Both variants feature a 7-axis anthropomorphic design with alternating roll-pitch-roll configurations, introducing a kinematically redundant null space. In the zero position ($q_i = 0$), the arm stands fully upright along the vertical Z-axis.
+
+### Parameter Convention
+These parameters adhere to the **Standard DH Convention**. The coordinate frame transformation matrix from frame $i-1$ to frame $i$ is defined as:
+
+$$T_i^{i-1} = Rot_z(\theta_i) \cdot Trans_z(d_i) \cdot Trans_x(a_i) \cdot Rot_x(\alpha_i)$$
+
+---
+
+## 1. KUKA LBR 7 R800 (Med / iiwa)
+* **Maximum Reach:** 800 mm
+* **Payload Capacity:** 7 kg
+
+| Joint ($i$) | $\alpha_{i-1}$ (rad) | $a_{i-1}$ (mm) | $d_i$ (mm) | $\theta_i$ (rad) | Joint Range |
+| :---: | :---: | :---: | :---: | :---: | :---: |
+| **1** | $0$ | $0$ | $310$ | $q_1$ | $\pm 170^\circ$ |
+| **2** | $-\pi/2$ | $0$ | $0$ | $q_2$ | $\pm 120^\circ$ |
+| **3** | $\pi/2$ | $0$ | $400$ | $q_3$ | $\pm 170^\circ$ |
+| **4** | $-\pi/2$ | $0$ | $0$ | $q_4$ | $\pm 120^\circ$ |
+| **5** | $\pi/2$ | $0$ | $400$ | $q_5$ | $\pm 170^\circ$ |
+| **6** | $-\pi/2$ | $0$ | $0$ | $q_6$ | $\pm 120^\circ$ |
+| **7** | $\pi/2$ | $0$ | $126$ | $q_7$ | $\pm 175^\circ$ |
+
+---
+
+## 2. KUKA LBR 14 R820 (Med / iiwa)
+* **Maximum Reach:** 820 mm
+* **Payload Capacity:** 14 kg
+
+| Joint ($i$) | $\alpha_{i-1}$ (rad) | $a_{i-1}$ (mm) | $d_i$ (mm) | $\theta_i$ (rad) | Joint Range |
+| :---: | :---: | :---: | :---: | :---: | :---: |
+| **1** | $0$ | $0$ | $360$ | $q_1$ | $\pm 170^\circ$ |
+| **2** | $-\pi/2$ | $0$ | $0$ | $q_2$ | $\pm 120^\circ$ |
+| **3** | $\pi/2$ | $0$ | $420$ | $q_3$ | $\pm 170^\circ$ |
+| **4** | $-\pi/2$ | $0$ | $0$ | $q_4$ | $\pm 120^\circ$ |
+| **5** | $\pi/2$ | $0$ | $400$ | $q_5$ | $\pm 170^\circ$ |
+| **6** | $-\pi/2$ | $0$ | $0$ | $q_6$ | $\pm 120^\circ$ |
+| **7** | $\pi/2$ | $0$ | $126$ | $q_7$ | $\pm 175^\circ$ |
+
+---
+
+## Technical Notes
+
+* **Flange Face Transformation:** The $d_7$ parameter ($126\text{ mm}$) transforms the mathematical model directly to the native mechanical tool flange face. When integrating custom end-effectors, add your tool's center-of-mass/tool-center-point (TCP) parameters directly onto $d_7$ or append it as an explicit rigid-body extension matrix.
+* **Modified DH Conversion:** If your inverse kinematics algorithm or environment (such as certain ROS configurations or legacy solvers) requires **Modified DH (Craig's Convention)**, shift the row index alignments down by one step. The absolute physical geometry metrics remain invariant.
