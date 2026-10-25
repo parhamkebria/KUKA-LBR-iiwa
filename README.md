@@ -1,7 +1,7 @@
-# KUKA LBR iiwa kinematics
+# KUKA LBR iiwa / LBR Med kinematics
 
-Forward and inverse kinematics for the 7-DoF KUKA LBR iiwa, as an importable
-Python module (NumPy only). 
+Forward and inverse kinematics for the 7-DoF KUKA LBR iiwa and LBR Med (7 R800
+and 14 R820), as an importable Python module (`KUKA.py`, NumPy only).
 
 The arm is redundant, so a pose has infinitely many IK solutions. They are
 selected with:
@@ -12,7 +12,14 @@ selected with:
   `bit1` = 1 if joint 4 < 0 (elbow), `bit2` = 1 if joint 6 < 0 (wrist).
 
 Units: metres and radians. Poses are 4×4 homogeneous matrices (flange in base frame).
-Link lengths: 0.34, 0.4, 0.4, 0.126 m.
+The robot model is chosen with the `payload` argument (kg), default `7`:
+
+| `payload` | Model | d1, d3, d5, d7 (mm) |
+|:---:|---|---|
+| `7` | LBR 7 R800 | 310, 400, 400, 126 |
+| `14` | LBR 14 R820 | 360, 420, 400, 126 |
+
+Any other value raises `ValueError`. Joint angles follow the DH tables in the [DH Parameters](#dh-parameters) section below.
 
 ## Usage
 
@@ -22,36 +29,39 @@ from KUKA import forward_kinematics, inverse_kinematics, within_joint_limits
 
 q = np.deg2rad([10, 30, -20, 60, 15, 40, 5])
 
-pose, param, conf, _ = forward_kinematics(q)
-joints, _, _ = inverse_kinematics(pose, param, conf)   # recovers q
+payload = 14   # 7 -> LBR 7 R800, 14 -> LBR 14 R820
 
-print(within_joint_limits(joints))
+pose, param, conf, _ = forward_kinematics(q, payload)
+joints, _, _ = inverse_kinematics(pose, param, conf, payload)   # recovers q
+
+print(within_joint_limits(joints, payload))
 ```
 
 Sweeping the elbow (arm angle) for a fixed end-effector pose:
 
 ```python
 for psi in np.linspace(-1, 1, 5):
-    q_psi, _, _ = inverse_kinematics(pose, psi, conf)
+    q_psi, _, _ = inverse_kinematics(pose, psi, conf, payload)
 ```
 
 ## API
 
 | Function | Description |
 |---|---|
-| `forward_kinematics(joints)` | → `(pose, param, conf, jout)`; `joints` has 7 values. |
-| `inverse_kinematics(pose, param=0.0, conf=0)` | → `(joints, s_mat, w_mat)`; `s_mat`/`w_mat` are the shoulder/wrist matrices `[A, B, C]` (3×3×3) used for joint-limit handling. |
-| `configuration(rconf)` | Decode to `(arm, elbow, wrist)` ∈ {±1}. |
-| `dh_matrix(a, alpha, d, theta)` | Single DH transform. |
-| `within_joint_limits(joints)` | Checks ±170, 120, 170, 120, 170, 120, 175°. |
+| `forward_kinematics(joints, payload=7)` | → `(pose, param, conf, jout)`; `joints` has 7 values. |
+| `inverse_kinematics(pose, param=0.0, conf=0, payload=7)` | → `(joints, s_mat, w_mat)`; `s_mat`/`w_mat` are the shoulder/wrist matrices `[A, B, C]` (3×3×3) used for joint-limit handling. |
+| `configuration(conf)` | Decode to `(arm, elbow, wrist)` ∈ {±1}. |
+| `dh_table(payload=7)` | DH table `[alpha_{i-1}, a_{i-1}, d_i]` of the selected model. |
+| `dh_matrix(alpha, a, d, theta)` | Single DH transform (README convention). |
+| `within_joint_limits(joints, payload=7)` | Checks ±170, 120, 170, 120, 170, 120, 175°. |
 
 `inverse_kinematics` and `forward_kinematics` use an internal reference-plane
 computation (virtual arm with joint 3 = 0) that defines the zero of `param`.
 It is also where the reachability and elbow-singularity checks happen, so
 those errors surface from both functions.
 
-`inverse_kinematics` raises `KukaError` (a `ValueError`) when the wrist is
-outside the reachable workspace or at the elbow singularity. Joint limits are
+Both functions raise `KukaError` (a `ValueError`) when the wrist is outside the
+reachable workspace or the elbow is singular (fully stretched or folded). Joint limits are
 **not** enforced by IK; check with `within_joint_limits`.
 
 ## Self-test
@@ -60,23 +70,25 @@ outside the reachable workspace or at the elbow singularity. Joint limits are
 python KUKA.py
 ```
 
-Runs random FK → IK → FK round trips (max pose error ≈ 1e-12).
+Runs random FK → IK → FK round trips for both models (max pose error ≈ 1e-12).
 
-# KUKA LBR Med & LBR iiwa DH Parameters
+## DH Parameters
 
-This repository contains the standard Denavit-Hartenberg (DH) parameters for the **KUKA LBR Med** and **KUKA LBR iiwa** 7-DOF collaborative robot arms. Because the LBR Med is built directly on the LBR iiwa chassis, models sharing the same payload/reach designation utilize identical geometric forward and inverse kinematics models.
+This section lists the modified (Craig) Denavit-Hartenberg parameters for the **KUKA LBR Med** and **KUKA LBR iiwa** 7-DOF collaborative robot arms. Because the LBR Med is built directly on the LBR iiwa chassis, models sharing the same payload/reach designation utilize identical geometric forward and inverse kinematics models.
 
-## Kinematic Structure
+### Kinematic Structure
 Both variants feature a 7-axis anthropomorphic design with alternating roll-pitch-roll configurations, introducing a kinematically redundant null space. In the zero position ($q_i = 0$), the arm stands fully upright along the vertical Z-axis.
 
 ### Parameter Convention
-These parameters adhere to the **Standard DH Convention**. The coordinate frame transformation matrix from frame $i-1$ to frame $i$ is defined as:
+These parameters adhere to the **Modified (Craig) DH Convention**, which is what `dh_matrix` implements. The transformation from frame $i-1$ to frame $i$ is:
 
-$$T_i^{i-1} = Rot_z(\theta_i) \cdot Trans_z(d_i) \cdot Trans_x(a_i) \cdot Rot_x(\alpha_i)$$
+$$T_{i-1}^{i} = Rot_x(\alpha_{i-1}) \cdot Trans_x(a_{i-1}) \cdot Rot_z(\theta_i) \cdot Trans_z(d_i)$$
+
+The analytic solver internally uses an equivalent standard-DH chain; the two agree on the full flange pose once joint 4 is sign-converted, which `KUKA.py` does automatically, so all inputs and outputs follow the tables below.
 
 ---
 
-## 1. KUKA LBR 7 R800 (Med / iiwa)
+### 1. KUKA LBR 7 R800 (Med / iiwa)
 * **Maximum Reach:** 800 mm
 * **Payload Capacity:** 7 kg
 
@@ -92,7 +104,7 @@ $$T_i^{i-1} = Rot_z(\theta_i) \cdot Trans_z(d_i) \cdot Trans_x(a_i) \cdot Rot_x(
 
 ---
 
-## 2. KUKA LBR 14 R820 (Med / iiwa)
+### 2. KUKA LBR 14 R820 (Med / iiwa)
 * **Maximum Reach:** 820 mm
 * **Payload Capacity:** 14 kg
 
@@ -108,7 +120,7 @@ $$T_i^{i-1} = Rot_z(\theta_i) \cdot Trans_z(d_i) \cdot Trans_x(a_i) \cdot Rot_x(
 
 ---
 
-## Technical Notes
+### Technical Notes
 
 * **Flange Face Transformation:** The $d_7$ parameter ($126\text{ mm}$) transforms the mathematical model directly to the native mechanical tool flange face. When integrating custom end-effectors, add your tool's center-of-mass/tool-center-point (TCP) parameters directly onto $d_7$ or append it as an explicit rigid-body extension matrix.
-* **Modified DH Conversion:** If your inverse kinematics algorithm or environment (such as certain ROS configurations or legacy solvers) requires **Modified DH (Craig's Convention)**, shift the row index alignments down by one step. The absolute physical geometry metrics remain invariant.
+* **Standard DH Conversion:** If your solver requires the standard DH convention, shift the row alignments by one step ($\alpha_{i-1}, a_{i-1}$ move to row $i-1$). The physical geometry is unchanged.
